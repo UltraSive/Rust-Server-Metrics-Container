@@ -1,0 +1,67 @@
+version: '3'
+services:
+  influxdb:
+    image: influxdb:1.8
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=mydb
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin_password
+      - INFLUXDB_HTTP_WRITE_TRACING=true
+    volumes:
+      - /path/to/influxdb/data:/var/lib/influxdb
+    command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin_password
+    volumes:
+      - /path/to/grafana/data:/var/lib/grafana
+    depends_on:
+      - influxdb
+
+  grafana-datasource-config:
+    image: grafana/grafana:latest
+    volumes:
+      - /path/to/grafana/data:/var/lib/grafana
+    command: ["cp", "/etc/grafana/provisioning/datasources/datasource.yml", "/var/lib/grafana/provisioning/datasources/"]
+
+  influxdb-config:
+    image: busybox
+    volumes:
+      - /path/to/influxdb/config:/etc/influxdb
+    command: ["sh", "-c", "sed -i 's/# max-values-per-tag = 0/max-values-per-tag = 0/g' /etc/influxdb/influxdb.conf && sed -i 's/# max-series-per-database = 0/max-series-per-database = 0/g' /etc/influxdb/influxdb.conf"]
+  
+  influxdb-restart:
+    image: influxdb:1.8
+    volumes:
+      - /path/to/influxdb/data:/var/lib/influxdb
+    command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
+
+  influxdb-create-db:
+    image: influxdb:1.8
+    depends_on:
+      - influxdb-restart
+    environment:
+      - INFLUXDB_DB=mydb
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin_password
+    command: ["influx", "-username", "admin", "-password", "admin_password", "-execute", "CREATE DATABASE mydb WITH DURATION 12w NAME myrp"]
+  
+  influxdb-create-user:
+    image: influxdb:1.8
+    depends_on:
+      - influxdb-restart
+    environment:
+      - INFLUXDB_DB=mydb
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin_password
+    command: ["influx", "-username", "admin", "-password", "admin_password", "-execute", "CREATE USER myuser WITH PASSWORD 'mypassword'"]
